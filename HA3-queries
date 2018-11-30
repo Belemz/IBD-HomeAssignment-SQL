@@ -1,0 +1,280 @@
+-- 1
+SELECT
+    Mun.name AS Municipality,
+    Par.name AS Parish
+FROM
+    Parish AS Par,
+    Municipality AS Mun,
+    District AS Dis
+WHERE
+    Dis.name = 'Coimbra'
+    AND Mun.dis_id = Dis.dis_id
+    AND Par.mun_id = Mun.mun_id;
+
+
+-- %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+-- 2
+
+SELECT
+    Lo.name AS OWNER,
+    Lo.spouse_name AS Spouse
+FROM
+    LandOwner AS Lo,
+    Property AS Prop
+    JOIN Parish AS Par ON Prop.par_id = Par.par_id
+WHERE
+    Lo.lo_id = Prop.lo_id
+    AND Par.name = 'Alvoco';
+
+-- %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+-- 3
+SELECT
+    Par.name
+FROM
+    Parish AS Par,
+    Property AS Prop,
+    Stand AS St,
+    StandFire AS Sf,
+    Fire AS F
+WHERE
+    Par.par_id = Prop.par_id
+    AND Prop.prop_id = St.prop_id
+    AND St.st_id = Sf.st_id
+    AND Sf.f_id = F.f_id
+    AND F.ftype = 'C'
+    AND year(dstart) = 2017;
+
+-- %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+-- 4
+SELECT
+    Border.st1 AS BorderingStands  -- gets the stands that border the stand with the fire. 
+FROM
+    Stand AS St1,
+    Border
+WHERE
+    St1.st_id = Border.st2
+    AND St1.st_id IN (
+        SELECT
+            St2.st_id -- gets the stands that had the chosen fires
+        FROM
+            Stand AS St2,
+            StandFire AS Sf 
+        WHERE
+            St2.st_id = Sf.st_id
+            AND Sf.f_id = (
+                SELECT
+                    F.f_id -- gets the copice fires that occurred in 2017
+                FROM
+                    Fire AS F
+                WHERE
+                    F.ftype = 'C'
+                    AND year(dstart) = 2017));
+
+-- %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+-- 5
+SELECT
+    St.st_id
+FROM
+    Border,
+    Stand AS St
+WHERE
+    Border.st1 = St.st_id
+    AND Border.st2 NOT IN (
+        SELECT
+            So.st_id
+        FROM
+            StandOperation AS So,
+            Operation AS Op
+        WHERE
+            So.op_id = Op.op_id
+            AND Op.description = 'final harvest'
+            AND So.year = 2016)
+        AND Border.st1 NOT IN (
+            SELECT
+                So.st_id
+            FROM
+                StandOperation AS So,
+                Operation AS Op
+            WHERE
+                So.op_id = Op.op_id
+                AND Op.description = 'final harvest'
+                AND So.year = 2016);
+
+
+-- %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+-- 6
+SELECT
+    Lo.name
+FROM
+    LandOwner AS Lo,
+    Property AS Prop,
+    Stand AS St
+WHERE
+    Lo.lo_id = Prop.lo_id
+    AND Prop.prop_id = St.prop_id
+    AND (St.st_id IN (
+        SELECT
+            St.st_id
+        FROM
+            StandOperation AS So,
+            Product AS Prod
+        WHERE
+            St.st_id = So.st_id
+            AND So.prod = Prod.p_id
+            AND Prod.prod_name = 'cork oak')
+        AND St.st_id NOT IN (
+            SELECT
+                St.st_id
+            FROM
+                Stand AS St,
+                Species AS Sp
+            WHERE
+                St.spec_id = Sp.spec_id
+                AND Sp.name = 'Eucalyptus grand'));
+
+-- %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+-- 7
+SELECT
+    So.year,
+    Op.description,
+    sum(volume)
+FROM
+    StandOperation AS So,
+    Operation AS Op
+WHERE
+    So.year >= 2015
+    AND So.op_id = Op.op_id
+    AND (Op.description = 'thinnings'
+        OR Op.description = 'final harvest')
+GROUP BY
+    So.year,
+    Op.description;
+
+
+-- %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%!!!!!! ! ALTERAR ESTE ! !!!!%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+-- 8
+SELECT
+    YEAR(F1.dstart),
+    Lo1.name ,
+    SUM(Sf1.area_burned)
+FROM
+    LandOwner AS Lo1,
+    Property AS Prop1,
+    Stand AS St1,
+    StandFire AS Sf1,
+    Fire AS F1
+WHERE
+    Lo1.lo_id = Prop1.lo_id
+    AND Prop1.prop_id = St1.prop_id
+    AND St1.st_id = Sf1.st_id
+    AND Sf1.f_id = F1.f_id
+    AND YEAR(F1.dstart) >= 2015
+GROUP BY
+    YEAR(F1.dstart)
+HAVING
+    SUM(Sf1.area_burned) >= ALL (
+        SELECT
+            SUM(Sf2.area_burned)
+        FROM
+            Property AS Prop2,
+            Stand AS St2,
+            StandFire AS Sf2,
+            Fire AS F2
+        WHERE
+            Prop2.prop_id = St2.prop_id
+            AND St2.st_id = Sf2.st_id
+            AND Sf2.f_id = F2.f_id
+        GROUP BY
+            Prop2.prop_id,
+            YEAR(F2.dstart));
+
+-- %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+-- 9
+SELECT
+    Prod.prod_name,
+    I.year,
+    AVG(I.price_m3)
+FROM
+    Product AS Prod,
+    InvoiceSale AS I
+WHERE
+    Prod.p_id = I.prod
+    AND I.year >= 2015
+GROUP BY
+    Prod.prod_name,
+    I.year;
+
+
+-- %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+-- 10
+SELECT
+    Mun.name AS Municipality,
+    year(F.dstart) AS Year,
+    SUM(Sf.area_burned) AS 'Total area burned',
+    COUNT(DISTINCT St.st_id) AS 'Number of burned Stands'
+FROM
+    Municipality AS Mun,
+    Parish AS Par,
+    Property AS Prop,
+    Stand AS St,
+    StandFire AS Sf,
+    Fire AS F
+WHERE
+    Sf.f_id = F.f_id
+    AND St.st_id = Sf.st_id
+    AND St.prop_id = Prop.prop_id
+    AND Prop.par_id = Par.par_id
+    AND Par.mun_id = Mun.mun_id
+GROUP BY
+    Mun.name,
+    year(F.dstart);
+
+
+-- %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+-- 11
+SELECT
+    lo.lo_id,
+    lo.name
+FROM
+    LandOwner AS lo,
+    Property AS P,
+    Stand AS St
+WHERE
+    lo.lo_id = P.lo_id
+    AND P.prop_id = St.prop_id
+GROUP BY
+    P.prop_id
+HAVING
+    COUNT(DISTINCT spec_id) = (
+        SELECT
+            COUNT(*)
+        FROM
+            Species);
+
+-- %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+-- 12
+SELECT
+    IS1.year,
+    C1.name
+FROM
+    Client AS C1,
+    InvoiceSale AS IS1
+WHERE
+    C1.tax_id = IS1.cli
+    AND IS1.year >= 2015
+GROUP BY
+    IS1.year,
+    C1.name
+HAVING
+    SUM(total) >= ALL (
+        SELECT
+            SUM(total)
+        FROM
+            Client AS C2,
+            InvoiceSale AS IS2
+        WHERE
+            C2.tax_id = IS2.cli
+            AND IS1.year = IS2.year
+        GROUP BY
+            IS2.year,
+            C2.name);
